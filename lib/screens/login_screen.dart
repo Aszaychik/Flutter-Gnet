@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import '../models/user_model.dart';
+import '../services/storage_service.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -27,13 +29,10 @@ class _LoginScreenState extends State<LoginScreen> {
         final userData = response['data']['user'];
         final token = response['data']['token'];
 
-        // Convert to User object
-        final user = User.fromJson(userData);
+        // Save to storage
+        await StorageService.saveAuthData(token, userData);
 
-        // TODO: Save token and user data (see next step)
-        print('Login successful! Token: $token');
-        print('User: ${user.name} (${user.role})');
-
+        // Navigate to home screen
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -59,29 +58,29 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             TextField(
               controller: _usernameController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Username',
                 border: OutlineInputBorder(),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
               ),
             ),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             _isLoading
-                ? CircularProgressIndicator()
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
               onPressed: _login,
               style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               ),
-              child: Text('LOGIN', style: TextStyle(fontSize: 18)),
+              child: const Text('LOGIN', style: TextStyle(fontSize: 18)),
             ),
           ],
         ),
