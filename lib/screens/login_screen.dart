@@ -72,15 +72,12 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // App Logo/Title
-                const FlutterLogo(size: 80),
-                const SizedBox(height: 20),
-                const Text(
-                  'Gnet App',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.onPrimary,
-                    letterSpacing: 1.2,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    height: 120,
+                    width: 160,
                   ),
                 ),
                 const SizedBox(height: 10),
