@@ -1,7 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:gnet_app/models/activity_model.dart';
 import 'package:gnet_app/services/activity_service.dart';
 import 'package:gnet_app/services/api_service.dart';
+import 'package:gnet_app/services/storage_service.dart';
 import 'package:gnet_app/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -20,20 +22,36 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = true;
   bool _isLoading = false;
   bool _isRefreshing = false;
+  String? _authToken;
+  final Map<String, Uint8List> _imageCache = {};
 
   @override
   void initState() {
     super.initState();
-    _loadActivities();
+    _loadToken();
     _scrollController.addListener(_scrollListener);
   }
 
+  Future<void> _loadToken() async {
+    final token = await StorageService.getToken();
+    setState(() => _authToken = token);
+    _loadActivities();
+  }
+
   Future<void> _loadActivities() async {
-    if (_isLoading) return;
+    if (_isLoading || _authToken == null) return;
     setState(() => _isLoading = true);
 
     try {
       final activities = await _activityService.getActivities(page: _currentPage);
+
+      // Pre-cache images
+      for (final activity in activities) {
+        if (!_imageCache.containsKey(activity.imageUrl)) {
+          _cacheImage(activity.imageUrl);
+        }
+      }
+
       setState(() {
         _activities.addAll(activities);
         _hasMore = activities.isNotEmpty;
@@ -45,7 +63,25 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
         _isRefreshing = false;
       });
-      // Handle error appropriately
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading activities: $e'),
+            backgroundColor: AppTheme.lightTheme.colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _cacheImage(String imagePath) async {
+    try {
+      final bytes = await ApiService().getImageBytes(imagePath);
+      setState(() {
+        _imageCache[imagePath] = bytes;
+      });
+    } catch (e) {
+      debugPrint('Error caching image: $e');
     }
   }
 
@@ -63,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _currentPage = 1;
       _activities.clear();
+      _imageCache.clear();
       _isRefreshing = true;
     });
     await _loadActivities();
@@ -87,11 +124,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildContent() {
-    if (_isRefreshing && _activities.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    if (_authToken == null) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: AppTheme.lightTheme.colorScheme.primary,
+        ),
+      );
     }
 
-    if (_activities.isEmpty) {
+    if (_isRefreshing && _activities.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: AppTheme.lightTheme.colorScheme.primary,
+        ),
+      );
+    }
+
+    if (_activities.isEmpty && !_isLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -156,28 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
+            child: Container(
               height: 200,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                color: AppTheme.lightTheme.colorScheme.background,
-                height: 200,
-                child: Icon(
-                  Icons.image,
-                  size: 50,
-                  color: AppTheme.lightTheme.colorScheme.primary,
-                ),
-              ),
-              errorWidget: (context, url, error) => Container(
-                color: AppTheme.lightTheme.colorScheme.background,
-                height: 200,
-                child: Icon(
-                  Icons.broken_image,
-                  size: 50,
-                  color: AppTheme.lightTheme.colorScheme.error,
-                ),
-              ),
+              color: AppTheme.lightTheme.colorScheme.background,
+              child: _buildImageWidget(activity.imageUrl, imageUrl),
             ),
           ),
           Padding(
@@ -237,6 +268,43 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(String imagePath, String fullImageUrl) {
+    if (_imageCache.containsKey(imagePath)) {
+      return Image.memory(
+        _imageCache[imagePath]!,
+        height: 200,
+        fit: BoxFit.cover,
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: fullImageUrl,
+      height: 200,
+      fit: BoxFit.cover,
+      httpHeaders: _authToken != null
+          ? {'Authorization': 'Bearer $_authToken'}
+          : {},
+      placeholder: (context, url) => Container(
+        color: AppTheme.lightTheme.colorScheme.background,
+        height: 200,
+        child: Icon(
+          Icons.image,
+          size: 50,
+          color: AppTheme.lightTheme.colorScheme.primary,
+        ),
+      ),
+      errorWidget: (context, url, error) => Container(
+        color: AppTheme.lightTheme.colorScheme.background,
+        height: 200,
+        child: Icon(
+          Icons.broken_image,
+          size: 50,
+          color: AppTheme.lightTheme.colorScheme.error,
+        ),
       ),
     );
   }

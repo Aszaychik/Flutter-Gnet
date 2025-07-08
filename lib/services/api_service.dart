@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:gnet_app/models/activity_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:gnet_app/services/storage_service.dart';
@@ -13,6 +14,12 @@ class ApiService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
+  }
+
+  // Helper method to get auth headers for non-JSON requests
+  Future<Map<String, String>> _getAuthHeadersBasic() async {
+    final token = await StorageService.getToken();
+    return {'Authorization': 'Bearer $token'};
   }
 
   Future<Map<String, dynamic>> login(String username, String password) async {
@@ -52,6 +59,22 @@ class ApiService {
 
   // Get full image URL
   static String getFullImageUrl(String imagePath) {
-    return '$baseUrl/nextcloud/file/Activity/$imagePath';
+    // Properly encode the image path and construct URL
+    final encodedPath = Uri.encodeComponent(imagePath);
+    return '$baseUrl/nextcloud/file/Activity/$encodedPath';
+  }
+
+  // Get image bytes directly
+  Future<Uint8List> getImageBytes(String imagePath) async {
+    final response = await http.get(
+      Uri.parse(getFullImageUrl(imagePath)),
+      headers: await _getAuthHeadersBasic(),
+    );
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      throw Exception('Failed to load image: ${response.statusCode}');
+    }
   }
 }
