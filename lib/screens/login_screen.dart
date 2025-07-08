@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final userData = response['data']['user'];
         final token = response['data']['token'];
         await StorageService.saveAuthData(token, userData);
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/main');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
