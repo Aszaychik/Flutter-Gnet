@@ -254,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         Text(
-                          '${activity.createdAt.day}/${activity.createdAt.month}/${activity.createdAt.year}',
+                          '${activity.createdAt.day.toString().padLeft(2, '0')}/${activity.createdAt.month.toString().padLeft(2, '0')}/${activity.createdAt.year} ${activity.createdAt.hour.toString().padLeft(2, '0')}:${activity.createdAt.minute.toString().padLeft(2, '0')}',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             fontSize: 12,
                             color: AppTheme.lightTheme.colorScheme.onSurface.withOpacity(0.6),
