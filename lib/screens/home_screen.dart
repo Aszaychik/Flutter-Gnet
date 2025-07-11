@@ -6,6 +6,7 @@ import 'package:gnet_app/services/api_service.dart';
 import 'package:gnet_app/services/storage_service.dart';
 import 'package:gnet_app/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -24,6 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isRefreshing = false;
   String? _authToken;
   final Map<String, Uint8List> _imageCache = {};
+  DateTime? _selectedDate;
+  bool _isDateFilterApplied = false;
 
   @override
   void initState() {
@@ -101,8 +104,53 @@ class _HomeScreenState extends State<HomeScreen> {
       _activities.clear();
       _imageCache.clear();
       _isRefreshing = true;
+      _selectedDate = null;
+      _isDateFilterApplied = false;
     });
     await _loadActivities();
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: AppTheme.lightTheme.copyWith(
+            colorScheme: AppTheme.lightTheme.colorScheme.copyWith(
+              primary: AppTheme.lightTheme.colorScheme.primary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _isDateFilterApplied = true;
+      });
+    }
+  }
+
+  void _clearDateFilter() {
+    setState(() {
+      _selectedDate = null;
+      _isDateFilterApplied = false;
+    });
+  }
+
+  List<Activity> get _filteredActivities {
+    if (_selectedDate == null) return _activities;
+
+    return _activities.where((activity) {
+      return activity.createdAt.year == _selectedDate!.year &&
+          activity.createdAt.month == _selectedDate!.month &&
+          activity.createdAt.day == _selectedDate!.day;
+    }).toList();
   }
 
   @override
@@ -118,6 +166,25 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Recent Activities'),
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.calendar_today,
+              color: _isDateFilterApplied
+                  ? AppTheme.lightTheme.colorScheme.secondary
+                  : AppTheme.lightTheme.colorScheme.onPrimary,
+            ),
+            onPressed: () => _selectDate(context),
+          ),
+          if (_isDateFilterApplied)
+            IconButton(
+              icon: Icon(
+                Icons.clear,
+                color: AppTheme.lightTheme.colorScheme.error,
+              ),
+              onPressed: _clearDateFilter,
+            ),
+        ],
       ),
       body: _buildContent(),
     );
@@ -140,21 +207,35 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (_activities.isEmpty && !_isLoading) {
+    final filteredActivities = _filteredActivities;
+
+    if (filteredActivities.isEmpty && !_isLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.list_alt, size: 64, color: AppTheme.lightTheme.colorScheme.primary),
+            Icon(
+              Icons.list_alt,
+              size: 64,
+              color: AppTheme.lightTheme.colorScheme.primary,
+            ),
             const SizedBox(height: 16),
             Text(
-              'No activities found',
+              _isDateFilterApplied
+                  ? 'No activities for selected date'
+                  : 'No activities found',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
-            TextButton(
-              onPressed: _refreshData,
-              child: const Text('Retry'),
-            ),
+            if (_isDateFilterApplied)
+              TextButton(
+                onPressed: _clearDateFilter,
+                child: const Text('Clear filter'),
+              )
+            else
+              TextButton(
+                onPressed: _refreshData,
+                child: const Text('Retry'),
+              ),
           ],
         ),
       );
@@ -163,24 +244,56 @@ class _HomeScreenState extends State<HomeScreen> {
     return RefreshIndicator(
       onRefresh: _refreshData,
       color: AppTheme.lightTheme.colorScheme.primary,
-      child: ListView.builder(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: _activities.length + 1,
-        itemBuilder: (context, index) {
-          if (index < _activities.length) {
-            final activity = _activities[index];
-            final imageUrl = ApiService.getFullImageUrl(activity.imageUrl);
-            return _buildActivityCard(activity, imageUrl, context);
-          }
-          return _buildLoader();
-        },
+      child: Column(
+        children: [
+          if (_isDateFilterApplied)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              color: AppTheme.lightTheme.colorScheme.primary.withOpacity(0.1),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Showing activities for: ${DateFormat.yMMMMd().format(_selectedDate!)}',
+                    style: TextStyle(
+                      color: AppTheme.lightTheme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _clearDateFilter,
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: AppTheme.lightTheme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: filteredActivities.length + 1,
+              itemBuilder: (context, index) {
+                if (index < filteredActivities.length) {
+                  final activity = filteredActivities[index];
+                  final imageUrl = ApiService.getFullImageUrl(activity.imageUrl);
+                  return _buildActivityCard(activity, imageUrl, context);
+                }
+                return _buildLoader();
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLoader() {
-    return _hasMore
+    return _hasMore && !_isDateFilterApplied
         ? Padding(
       padding: const EdgeInsets.all(16.0),
       child: Center(
