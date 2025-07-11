@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:gnet_app/models/activity_model.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:gnet_app/services/storage_service.dart';
+import 'package:path/path.dart' as path;
 
 class ApiService {
   static const String baseUrl = "http://10.2.11.13:8000/api/v1";
@@ -75,6 +77,47 @@ class ApiService {
       return response.bodyBytes;
     } else {
       throw Exception('Failed to load image: ${response.statusCode}');
+    }
+  }
+
+  // Create new activity
+  Future<bool> createActivity({
+    required Uint8List imageBytes,
+    required String imageName,
+    required String title,
+    required String description,
+  }) async {
+    final token = await StorageService.getToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/activity/store'),
+    );
+
+    // Add authorization header
+    request.headers['Authorization'] = 'Bearer $token';
+
+    // Add image file
+    final multipartFile = http.MultipartFile.fromBytes(
+      'file',
+      imageBytes,
+      filename: imageName,
+      contentType: MediaType('image', path.extension(imageName).replaceFirst('.', '')),
+    );
+    request.files.add(multipartFile);
+
+    // Add text fields
+    request.fields['title'] = title;
+    request.fields['description'] = description;
+
+    // Send request
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+
+    if (response.statusCode == 201) {
+      final jsonResponse = jsonDecode(responseBody);
+      return jsonResponse['success'] == true;
+    } else {
+      throw Exception('Failed to create activity: ${response.statusCode} - $responseBody');
     }
   }
 }
