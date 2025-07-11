@@ -44,17 +44,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadActivities() async {
     if (_isLoading || _authToken == null) return;
     setState(() => _isLoading = true);
-
     try {
       final activities = await _activityService.getActivities(page: _currentPage);
-
-      // Pre-cache images
       for (final activity in activities) {
         if (!_imageCache.containsKey(activity.imageUrl)) {
           _cacheImage(activity.imageUrl);
         }
       }
-
       setState(() {
         _activities.addAll(activities);
         _hasMore = activities.isNotEmpty;
@@ -127,7 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-
     if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
@@ -145,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Activity> get _filteredActivities {
     if (_selectedDate == null) return _activities;
-
     return _activities.where((activity) {
       return activity.createdAt.year == _selectedDate!.year &&
           activity.createdAt.month == _selectedDate!.month &&
@@ -191,15 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildContent() {
-    if (_authToken == null) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: AppTheme.lightTheme.colorScheme.primary,
-        ),
-      );
-    }
-
-    if (_isRefreshing && _activities.isEmpty) {
+    if (_authToken == null || (_isRefreshing && _activities.isEmpty)) {
       return Center(
         child: CircularProgressIndicator(
           color: AppTheme.lightTheme.colorScheme.primary,
@@ -305,6 +291,28 @@ class _HomeScreenState extends State<HomeScreen> {
         : const SizedBox();
   }
 
+  void _onImageTap(Activity activity, String fullImageUrl) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            child: Image(
+              image: _imageCache.containsKey(activity.imageUrl)
+                  ? MemoryImage(_imageCache[activity.imageUrl]!)
+                  : CachedNetworkImageProvider(fullImageUrl),
+            ),
+          ),
+        ),
+      ),
+    ));
+  }
+
   Widget _buildActivityCard(Activity activity, String imageUrl, BuildContext context) {
     return Card(
       margin: const EdgeInsets.all(12),
@@ -316,12 +324,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRRect(
+          InkWell(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Container(
-              height: 200,
-              color: AppTheme.lightTheme.colorScheme.background,
-              child: _buildImageWidget(activity.imageUrl, imageUrl),
+            onTap: () => _onImageTap(activity, imageUrl),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: Container(
+                height: 200,
+                color: AppTheme.lightTheme.colorScheme.background,
+                child: _buildImageWidget(activity.imageUrl, imageUrl),
+              ),
             ),
           ),
           Padding(
@@ -393,14 +405,11 @@ class _HomeScreenState extends State<HomeScreen> {
         fit: BoxFit.cover,
       );
     }
-
     return CachedNetworkImage(
       imageUrl: fullImageUrl,
       height: 200,
       fit: BoxFit.cover,
-      httpHeaders: _authToken != null
-          ? {'Authorization': 'Bearer $_authToken'}
-          : {},
+      httpHeaders: _authToken != null ? {'Authorization': 'Bearer $_authToken'} : {},
       placeholder: (context, url) => Container(
         color: AppTheme.lightTheme.colorScheme.background,
         height: 200,
