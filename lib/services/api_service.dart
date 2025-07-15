@@ -7,7 +7,7 @@ import 'package:gnet_app/services/storage_service.dart';
 import 'package:path/path.dart' as path;
 
 class ApiService {
-  static const String baseUrl = "http://10.2.11.13:8000/api/v1";
+  static const String baseUrl = "https://billing.griyaaksesteknologi.com/api/v1";
 
   // Helper method to get auth headers
   Future<Map<String, String>> _getAuthHeaders() async {
